@@ -1,9 +1,11 @@
 shader_type spatial;
-render_mode cull_disabled, diffuse_toon, specular_schlick_ggx, shadows_disabled;
+render_mode cull_disabled, diffuse_toon, specular_schlick_ggx;
 // Nice Shader by @_Malido ^^
 
 uniform vec3 top_color: source_color;
 uniform vec3 bottom_color: source_color;
+uniform float ambient_occlusion_factor: hint_range(0.0, 1.0, 0.01) = 0.3;
+uniform float specular_strength: hint_range(0.0, 1.0, 0.01) = 0.4;
 uniform float player_displacement_strength: hint_range(0.0, 1.0, 0.01) = 0.4;
 uniform float player_displacement_size: hint_range(0.0, 2.0, 0.01) = 1.0;
 
@@ -33,18 +35,25 @@ void vertex() {
 	// Apply Wind displacement linearly
 	VERTEX += wind_vector * (1.0 - UV.y) * (1.0 - player_position_factor * 0.7);
 	
+	// A new normal correction, which aligns the normals of the mesh facing upwards no matter the original direction.
+	NORMAL = vec3(0.0, 1.0, 0.0);
 }
 
 void fragment() {
 	vec3 color = mix(bottom_color, top_color, 1.0 - UV.y);
-	ALBEDO = color;
-	ROUGHNESS = 0.3;
+	
+	// Add fake ambient occlusion by darkening the base of the mesh
+	float ao_fallof = pow(UV.y, 5.0);
+	vec3 ao_color = bottom_color * (1.0 - ambient_occlusion_factor);
+	
+	ALBEDO = mix(color, ao_color, ao_fallof);
+	ROUGHNESS = 0.4;
 	
 	// Increase the Specular with Grass Height
-	SPECULAR *=  (1.0 - UV.y);
+	SPECULAR *= (1.0 - UV.y) * specular_strength;
 	
-	// I had issues with the Normals imported from Blender,
-	// so I just set the Normals facing up manually.
-	// You can disable this line if you have no normal shading problems
-	NORMAL_MAP = vec3(0, 1, 0);
+	// Just removing some funny shading
+	if (!FRONT_FACING) {
+		NORMAL = -NORMAL;
+	}
 }
